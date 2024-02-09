@@ -75,6 +75,8 @@ func (*ops) UpdateFuncs(gcp cloud.Cloud) *rnode.UpdateFuncs[compute.BackendServi
 			Global:   gcp.BetaBackendServices().Update,
 			Regional: gcp.BetaRegionBackendServices().Update,
 		},
+		// TODO(kl52752) remove this?
+		Options: rnode.UpdateFuncsNoFingerprint,
 	}
 }
 

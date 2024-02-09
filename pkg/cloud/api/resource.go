@@ -45,7 +45,7 @@ type Resource[GA any, Alpha any, Beta any] interface {
 	// Clone returns an exact structural copy of this resource.
 	// Clone() Resource[GA, Alpha, Beta] XXX
 
-	Inherit(got Resource[GA, Alpha, Beta]) error
+	Inherit(from Resource[GA, Alpha, Beta]) error
 }
 
 type resource[GA any, Alpha any, Beta any] struct {
@@ -54,13 +54,18 @@ type resource[GA any, Alpha any, Beta any] struct {
 }
 
 // Implements Resource.
-func (obj *resource[GA, Alpha, Beta]) Version() meta.Version                       { return obj.ver }
-func (obj *resource[GA, Alpha, Beta]) ResourceID() *cloud.ResourceID               { return obj.x.ResourceID() }
-func (obj *resource[GA, Alpha, Beta]) ToGA() (*GA, error)                          { return obj.x.ToGA() }
-func (obj *resource[GA, Alpha, Beta]) ToAlpha() (*Alpha, error)                    { return obj.x.ToAlpha() }
-func (obj *resource[GA, Alpha, Beta]) ToBeta() (*Beta, error)                      { return obj.x.ToBeta() }
-func (obj *resource[GA, Alpha, Beta]) Access(f func(x *GA)) error                  { return obj.x.Access(f) }
-func (obj *resource[GA, Alpha, Beta]) Inherit(got Resource[GA, Alpha, Beta]) error { return nil }
+func (obj *resource[GA, Alpha, Beta]) Version() meta.Version         { return obj.ver }
+func (obj *resource[GA, Alpha, Beta]) ResourceID() *cloud.ResourceID { return obj.x.ResourceID() }
+func (obj *resource[GA, Alpha, Beta]) ToGA() (*GA, error)            { return obj.x.ToGA() }
+func (obj *resource[GA, Alpha, Beta]) ToAlpha() (*Alpha, error)      { return obj.x.ToAlpha() }
+func (obj *resource[GA, Alpha, Beta]) ToBeta() (*Beta, error)        { return obj.x.ToBeta() }
+func (obj *resource[GA, Alpha, Beta]) Inherit(from Resource[GA, Alpha, Beta]) error {
+	fromGA, err := from.ToGA()
+	if err != nil {
+		// ignore error for now
+	}
+	return Inherit(&obj.x.ga, fromGA, obj.x.typeTrait.FieldTraits(meta.VersionGA))
+}
 
 // Diff implements Resource.
 func (obj *resource[GA, Alpha, Beta]) Diff(other Resource[GA, Alpha, Beta]) (*DiffResult, error) {

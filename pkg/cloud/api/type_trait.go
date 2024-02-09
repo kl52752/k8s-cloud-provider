@@ -182,6 +182,10 @@ func (dt *FieldTraits) System(p Path) { dt.add(p, FieldTypeSystem) }
 // AllowZeroValue specifies the type of the given path.
 func (dt *FieldTraits) AllowZeroValue(p Path) { dt.add(p, FieldTypeAllowZeroValue) }
 
+// InheritValue specifies the type of the given path.
+func (dt *FieldTraits) InheritValue(p Path) { dt.add(p, FieldTypeInherited) }
+
+// IsInheritableType checks if type is Inherited
 func (dt *FieldTraits) IsInheritableType() bool {
 	for _, f := range dt.fields {
 		if f.fType == FieldTypeInherited {

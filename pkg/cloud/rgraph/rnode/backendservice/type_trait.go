@@ -45,7 +45,7 @@ func (*typeTrait) FieldTraits(meta.Version) *api.FieldTraits {
 
 	dt.OutputOnly(api.Path{}.Pointer().Field("Iap").Field("Oauth2ClientSecretSha256"))
 	dt.OutputOnly(api.Path{}.Pointer().Field("CdnPolicy").Field("SignedUrlKeyNames"))
-
+	dt.InheritValue(api.Path{}.Pointer().Field("Fingerprint"))
 	// TODO: finish me
 	// TODO: handle alpha/beta
 

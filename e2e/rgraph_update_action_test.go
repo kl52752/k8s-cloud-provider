@@ -84,15 +84,15 @@ func buildHealthCheck(graphBuilder *rgraph.Builder, name string, checkIntervalSe
 func TestHcUpdateWithBackendService(t *testing.T) {
 	ctx := context.Background()
 	graphBuilder := rgraph.NewBuilder()
-
-	hcID, err := buildHealthCheck(graphBuilder, "hc-test", 15)
+	hcName := "hc-test"
+	hcID, err := buildHealthCheck(graphBuilder, hcName, 15)
 	if err != nil {
-		t.Fatalf("buildHealthCheck(_, hc-test, _) = %v, want nil", err)
+		t.Fatalf("buildHealthCheck(_, %s, _) = %v, want nil", hcName, err)
 	}
-
-	bsID, err := buildBackendService(graphBuilder, "bs-e2e", hcID, 80)
+	bsName := "bs-e2e"
+	bsID, err := buildBackendService(graphBuilder, bsName, hcID, 80)
 	if err != nil {
-		t.Fatalf("buildBackendService(_, bs-e2e, _, 80) = %v, want nil", err)
+		t.Fatalf("buildBackendService(_, %s, _, 80) = %v, want nil", bsName, err)
 	}
 
 	graph, err := graphBuilder.Build()
@@ -125,12 +125,12 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 			t.Logf("delete health check: %v", err)
 		}
 	})
-	checkGCEResources(t, ctx, hcID, bsID, 15)
+	checkGCEResources(t, ctx, hcID, bsID, 15, 80)
 
 	// update health check
-	hcID, err = buildHealthCheck(graphBuilder, "hc-test", 60)
+	hcID, err = buildHealthCheck(graphBuilder, hcName, 60)
 	if err != nil {
-		t.Fatalf("buildHealthCheck(_, hc-test, 60) = (_, %v), want (_, nil)", err)
+		t.Fatalf("buildHealthCheck(_, %s, 60) = (_, %v), want (_, nil)", hcName, err)
 	}
 	graph, err = graphBuilder.Build()
 	if err != nil {
@@ -170,16 +170,16 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 			t.Errorf("ex.Run(_,_) = ( %v, %v), want (*result, nil)", res, err)
 		}
 	}
-	checkGCEResources(t, ctx, hcID, bsID, 60)
+	checkGCEResources(t, ctx, hcID, bsID, 60, 80)
 	// update health check and check that Exist event was propagated to parents
-	hcID, err = buildHealthCheck(graphBuilder, "hc-test", 120)
+	hcID, err = buildHealthCheck(graphBuilder, hcName, 120)
 	if err != nil {
-		t.Fatalf("buildHealthCheck(_, hc-test, 120) = (_, %v), want (_, nil)", err)
+		t.Fatalf("buildHealthCheck(_, %s, 120) = (_, %v), want (_, nil)", hcName, err)
 	}
 	// update BackendService
-	bsID, err = buildBackendService(graphBuilder, "bs-e2e", hcID, 100)
+	bsID, err = buildBackendService(graphBuilder, bsName, hcID, 100)
 	if err != nil {
-		t.Fatalf("buildBackendService(_, bs-e2e, _, 100) = (_, %v), want (_, nil)", err)
+		t.Fatalf("buildBackendService(_, %s, _, 100) = (_, %v), want (_, nil)", bsName, err)
 	}
 	graph, err = graphBuilder.Build()
 	if err != nil {
@@ -190,7 +190,7 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 		t.Fatalf("plan.Do(_, _, _) = %v, want nil", err)
 	}
 	// HealthCheck updated expect ActionUpdate
-	// BackendService recreated expect Action Delete and Action Add
+	// BackendService update expect Action Delete and Action Add
 	expectedActions = []exec.ActionType{
 		exec.ActionTypeUpdate,
 		// exec.ActionTypeUpdate,
@@ -222,10 +222,102 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 			t.Errorf("ex.Run(_,_) = ( %v, %v), want (*result, nil)", res, err)
 		}
 	}
-	checkGCEResources(t, ctx, hcID, bsID, 120)
+	checkGCEResources(t, ctx, hcID, bsID, 120, 100)
+}
+func TestUpdateBackendService(t *testing.T) {
+	ctx := context.Background()
+	graphBuilder := rgraph.NewBuilder()
+	hcName := "hc-update"
+	hcID, err := buildHealthCheck(graphBuilder, hcName, 15)
+	if err != nil {
+		t.Fatalf("buildHealthCheck(_, %s, _) = %v, want nil", hcName, err)
+	}
+	bsName := "bs-update"
+	bsID, err := buildBackendService(graphBuilder, bsName, hcID, 80)
+	if err != nil {
+		t.Fatalf("buildBackendService(_, %s, _, 80) = %v, want nil", bsName, err)
+	}
+
+	graph, err := graphBuilder.Build()
+	if err != nil {
+		t.Fatalf("graphBuilder.Build() = %v, want nil", err)
+	}
+	result, err := plan.Do(ctx, theCloud, graph)
+	if err != nil {
+		t.Fatalf("plan.Do(_, _, _) = %v, want nil", err)
+	}
+
+	var viz exec.GraphvizTracer
+	ex, err := exec.NewSerialExecutor(result.Actions, exec.TracerOption(&viz))
+	if err != nil {
+		t.Logf("exec.NewSerialExecutor(_, _) err: %v", err)
+		return
+	}
+	res, err := ex.Run(context.Background(), theCloud)
+	if err != nil || res == nil {
+		t.Errorf("ex.Run(_,_) = %v, want nil", err)
+	}
+
+	t.Cleanup(func() {
+		err = theCloud.BackendServices().Delete(ctx, bsID.Key)
+		if err != nil {
+			t.Logf("delete backend service: %v", err)
+		}
+		err := theCloud.HealthChecks().Delete(ctx, hcID.Key)
+		if err != nil {
+			t.Logf("delete health check: %v", err)
+		}
+	})
+	checkGCEResources(t, ctx, hcID, bsID, 15, 80)
+
+	// update BackendService
+	bsID, err = buildBackendService(graphBuilder, bsName, hcID, 100)
+	if err != nil {
+		t.Fatalf("buildBackendService(_, %s, _, 100) = (_, %v), want (_, nil)", bsName, err)
+	}
+	graph, err = graphBuilder.Build()
+	if err != nil {
+		t.Fatalf("graphBuilder.Build() = %v, want nil", err)
+	}
+	result, err = plan.Do(ctx, theCloud, graph)
+	if err != nil {
+		t.Fatalf("plan.Do(_, _, _) = %v, want nil", err)
+	}
+
+	expectedActions := []exec.ActionType{
+		exec.ActionTypeUpdate,
+	}
+
+	t.Logf("\nPlan.Actions: %v", result.Actions)
+	t.Logf("\nPlan.Got: %v", result.Got)
+	t.Logf("\nPlan.Want: %v", result.Want)
+
+	err = expectActions(result.Actions, expectedActions)
+	if err != nil {
+		t.Fatalf("expectActions(_, _) = %v, want nil", err)
+	}
+	t.Log("\nstart NewSerialExecutor for update")
+	ex, err = exec.NewSerialExecutor(result.Actions, exec.TracerOption(&viz))
+	if err != nil {
+		t.Logf("exec.NewSerialExecutor err: %v", err)
+		return
+	}
+	res, err = ex.Run(context.Background(), theCloud)
+	if err != nil || res == nil {
+		t.Errorf("ex.Run(_,_) = ( %v, %v), want (*result, nil)", res, err)
+	}
+	t.Logf("exec.NewSerialExecutor finished, res: %v", res)
+	if len(res.Pending) > 0 {
+		t.Logf("Executor has %v, pending actions %v", len(res.Pending), res.Pending)
+		res, err = ex.Run(context.Background(), theCloud)
+		if err != nil || res == nil {
+			t.Errorf("ex.Run(_,_) = ( %v, %v), want (*result, nil)", res, err)
+		}
+	}
+	checkGCEResources(t, ctx, hcID, bsID, 15, 100)
 }
 
-func checkGCEResources(t *testing.T, ctx context.Context, hcID, bsID *cloud.ResourceID, hcInterval int) {
+func checkGCEResources(t *testing.T, ctx context.Context, hcID, bsID *cloud.ResourceID, hcInterval, bsPort int) {
 	t.Helper()
 	t.Log("---- Check Health Check ---- ")
 	gotHC, err := theCloud.HealthChecks().Get(ctx, hcID.Key)
@@ -241,6 +333,9 @@ func checkGCEResources(t *testing.T, ctx context.Context, hcID, bsID *cloud.Reso
 		t.Fatalf("theCloud.HealthChecks().Get(_, %s) = %v, want nil", bsID.Key, err)
 	}
 
+	if gotBS.Port != int64(bsPort) {
+		t.Errorf("BackendService port mismatch, got: %d want %d", gotBS.Port, bsPort)
+	}
 	if len(gotBS.HealthChecks) == 0 || gotBS.HealthChecks[0] != hcID.SelfLink(meta.VersionGA) {
 		t.Fatalf("BackendService %s does not have health check %s set", bsID.Key, hcID.SelfLink(meta.VersionGA))
 	}

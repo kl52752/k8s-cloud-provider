@@ -26,6 +26,7 @@ import (
 	alpha "google.golang.org/api/compute/v0.alpha"
 	beta "google.golang.org/api/compute/v0.beta"
 	"google.golang.org/api/compute/v1"
+	"k8s.io/klog/v2"
 )
 
 type backendServiceNode struct {
@@ -109,6 +110,13 @@ func (n *backendServiceNode) Actions(got rnode.Node) ([]exec.Action, error) {
 		return rnode.RecreateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource)
 
 	case rnode.OpUpdate:
+		gotRes, ok := got.(*backendServiceNode)
+		if !ok {
+			return nil, fmt.Errorf("BackendServiceNode: invalid type to Diff: %T", gotRes)
+		}
+		// TODO(kl52752) remove this is just debug
+		ga, _ := n.resource.ToGA()
+		klog.Infof("Before update: %v", ga.Fingerprint)
 		return rnode.UpdateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource)
 	}
 
