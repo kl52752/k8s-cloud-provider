@@ -142,6 +142,87 @@ func TestPathHasPrefix(t *testing.T) {
 	}
 }
 
+func TestResolveValue(t *testing.T) {
+	type StB struct {
+		C int
+	}
+	type StA struct {
+		B  string
+		C  int
+		Sb StB
+	}
+	type St struct {
+		I    int
+		PS   *string
+		LSta []StB
+		Sta  StA
+		PSta *StA
+	}
+
+	s := "some string"
+	s1 := St{}
+	s2 := St{
+		I:    1,
+		PS:   &s,
+		LSta: []StB{{C: 1}, {C: 2}},
+		Sta: StA{
+			B:  "b",
+			C:  7,
+			Sb: StB{C: 5},
+		},
+		PSta: &StA{
+			B:  "p",
+			C:  8,
+			Sb: StB{C: 5},
+		},
+	}
+
+	for _, tc := range []struct {
+		name      string
+		in        any
+		p         Path
+		wantValue reflect.Value
+		wantErr   bool
+	}{
+		{
+			name:      "*.PSta*.B",
+			in:        &s2,
+			p:         Path{}.Pointer().Field("PSta").Pointer().Field("B"),
+			wantValue: reflect.ValueOf(s2.PSta.B),
+		},
+		{
+			name:      "*.I",
+			in:        &s2,
+			p:         Path{}.Pointer().Field("I"),
+			wantValue: reflect.ValueOf(s2.I),
+		},
+		{
+			name:      "*.Sta.Sb",
+			in:        &s2,
+			p:         Path{}.Pointer().Field("Sta").Field("Sb"),
+			wantValue: reflect.ValueOf(s2.Sta.Sb),
+		},
+		{
+			name:    "empty struct",
+			in:      &s1,
+			p:       Path{}.Pointer().Field("PSta").Pointer().Field("B"),
+			wantErr: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := tc.p.ResolveValue(reflect.ValueOf(tc.in))
+			if gotErr := err != nil; gotErr != tc.wantErr {
+				t.Fatalf("ResolveValue() = %v; gotErr = %t, want %t", err, gotErr, tc.wantErr)
+			} else if gotErr {
+				return
+			}
+			if !v.Equal(tc.wantValue) {
+				t.Fatalf("ResolveValue() = %v, want %v", v, tc.wantValue)
+			}
+		})
+	}
+}
+
 func TestResolveType(t *testing.T) {
 	t.Parallel()
 

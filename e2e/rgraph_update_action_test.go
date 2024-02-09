@@ -176,7 +176,7 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildHealthCheck(_, hc-test, 120) = (_, %v), want (_, nil)", err)
 	}
-	// trigger BackendService recreation
+	// update BackendService
 	bsID, err = buildBackendService(graphBuilder, "bs-e2e", hcID, 100)
 	if err != nil {
 		t.Fatalf("buildBackendService(_, bs-e2e, _, 100) = (_, %v), want (_, nil)", err)
@@ -193,8 +193,7 @@ func TestHcUpdateWithBackendService(t *testing.T) {
 	// BackendService recreated expect Action Delete and Action Add
 	expectedActions = []exec.ActionType{
 		exec.ActionTypeUpdate,
-		exec.ActionTypeCreate,
-		exec.ActionTypeDelete,
+		// exec.ActionTypeUpdate,
 	}
 
 	t.Logf("\nPlan.Actions: %v", result.Actions)

@@ -206,3 +206,36 @@ func (p Path) ResolveType(t reflect.Type) (reflect.Type, error) {
 	}
 	return t, nil
 }
+
+// ResolveValue traverse the Path and returns the Value if set.
+func (p Path) ResolveValue(v reflect.Value) (reflect.Value, error) {
+	for i, x := range p {
+		if !v.IsValid() {
+			return reflect.Value{}, fmt.Errorf("element is invalid: %s", p[0:i])
+		}
+		if v.IsZero() {
+			return reflect.Value{}, fmt.Errorf("element is zero: %s", p)
+		}
+		switch x[0] {
+		case pathField:
+			if v.Kind() != reflect.Struct {
+				return reflect.Value{}, fmt.Errorf("at %s, expected struct, got %v", p[0:i], v.Kind())
+			}
+			fieldName := x[1:]
+			v = v.FieldByName(fieldName)
+		case pathSliceIndex, pathMapIndex:
+			return reflect.Value{}, fmt.Errorf("unsupported path type %q", x[0])
+		case pathPointer:
+			if v.Kind() != reflect.Pointer {
+				return reflect.Value{}, fmt.Errorf("at %s, expected pointer, got %v", p[0:i], v.Kind())
+			}
+			v = v.Elem()
+		default:
+			return reflect.Value{}, fmt.Errorf("at %s, invalid path type %q", p[0:i], x[0])
+		}
+	}
+	if v.IsZero() {
+		return reflect.Value{}, fmt.Errorf("element is zero: %s", p)
+	}
+	return v, nil
+}

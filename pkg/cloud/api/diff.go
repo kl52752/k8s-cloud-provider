@@ -155,7 +155,8 @@ func (d *differ[T]) do(p Path, av, bv reflect.Value) error {
 
 			fp := p.Field(aft.Name)
 			switch d.traits.fieldType(fp) {
-			case FieldTypeOutputOnly, FieldTypeSystem:
+			// do not diff inherited type it will be copy from `got`
+			case FieldTypeOutputOnly, FieldTypeSystem, FieldTypeInherited:
 				continue
 			}
 

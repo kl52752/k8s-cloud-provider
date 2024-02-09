@@ -150,6 +150,8 @@ const (
 	// FieldTypeAllowZeroValue is an ordinary field that can be zero-value
 	// without being in a metafield. This is used for testing.
 	FieldTypeAllowZeroValue FieldType = "AllowZeroValue"
+
+	FieldTypeInherited FieldType = "Inherited"
 )
 
 // CheckSchema validates that the traits are valid and match the schema of the
@@ -179,6 +181,15 @@ func (dt *FieldTraits) System(p Path) { dt.add(p, FieldTypeSystem) }
 
 // AllowZeroValue specifies the type of the given path.
 func (dt *FieldTraits) AllowZeroValue(p Path) { dt.add(p, FieldTypeAllowZeroValue) }
+
+func (dt *FieldTraits) IsInheritableType() bool {
+	for _, f := range dt.fields {
+		if f.fType == FieldTypeInherited {
+			return true
+		}
+	}
+	return false
+}
 
 // Clone create an exact copy of the traits.
 func (dt *FieldTraits) Clone() *FieldTraits {

@@ -63,13 +63,17 @@ func (n *backendServiceNode) Diff(gotNode rnode.Node) (*rnode.PlanDetails, error
 		details = append(details, fmt.Sprintf(s, args...))
 		needsRecreate = true
 	}
+	planUpdate := func(s string, args ...any) {
+		details = append(details, fmt.Sprintf(s, args...))
+		needsRecreate = false
+	}
 
 	for _, delta := range diff.Items {
 		switch {
 		case delta.Path.Equal(api.Path{}.Pointer().Field("LoadBalancingScheme")):
 			planRecreate("LoadBalancingScheme change: '%v' -> '%v'", delta.A, delta.B)
 		default:
-			planRecreate("%s change: '%v' -> '%v'", delta.Path, delta.A, delta.B)
+			planUpdate("%s change: '%v' -> '%v'", delta.Path, delta.A, delta.B)
 		}
 	}
 
@@ -80,8 +84,9 @@ func (n *backendServiceNode) Diff(gotNode rnode.Node) (*rnode.PlanDetails, error
 			Diff:      diff,
 		}, nil
 	}
+	n.resource.Inherit(got.resource)
 	return &rnode.PlanDetails{
-		Operation: rnode.OpRecreate,
+		Operation: rnode.OpUpdate,
 		Why:       "BackendService needs to be updated: " + strings.Join(details, ", "),
 		Diff:      diff,
 	}, nil
@@ -104,7 +109,7 @@ func (n *backendServiceNode) Actions(got rnode.Node) ([]exec.Action, error) {
 		return rnode.RecreateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource)
 
 	case rnode.OpUpdate:
-		// TODO
+		return rnode.UpdateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource)
 	}
 
 	return nil, fmt.Errorf("BackendServiceNode: invalid plan op %s", op)
