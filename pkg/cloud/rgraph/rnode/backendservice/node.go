@@ -21,11 +21,13 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/api"
+	"github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/meta"
 	"github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/rgraph/exec"
 	"github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/rgraph/rnode"
 	alpha "google.golang.org/api/compute/v0.alpha"
 	beta "google.golang.org/api/compute/v0.beta"
 	"google.golang.org/api/compute/v1"
+	"k8s.io/klog/v2"
 )
 
 type backendServiceNode struct {
@@ -63,13 +65,17 @@ func (n *backendServiceNode) Diff(gotNode rnode.Node) (*rnode.PlanDetails, error
 		details = append(details, fmt.Sprintf(s, args...))
 		needsRecreate = true
 	}
+	planUpdate := func(s string, args ...any) {
+		details = append(details, fmt.Sprintf(s, args...))
+		needsRecreate = false
+	}
 
 	for _, delta := range diff.Items {
 		switch {
 		case delta.Path.Equal(api.Path{}.Pointer().Field("LoadBalancingScheme")):
 			planRecreate("LoadBalancingScheme change: '%v' -> '%v'", delta.A, delta.B)
 		default:
-			planRecreate("%s change: '%v' -> '%v'", delta.Path, delta.A, delta.B)
+			planUpdate("%s change: '%v' -> '%v'", delta.Path, delta.A, delta.B)
 		}
 	}
 
@@ -81,7 +87,7 @@ func (n *backendServiceNode) Diff(gotNode rnode.Node) (*rnode.PlanDetails, error
 		}, nil
 	}
 	return &rnode.PlanDetails{
-		Operation: rnode.OpRecreate,
+		Operation: rnode.OpUpdate,
 		Why:       "BackendService needs to be updated: " + strings.Join(details, ", "),
 		Diff:      diff,
 	}, nil
@@ -104,7 +110,18 @@ func (n *backendServiceNode) Actions(got rnode.Node) ([]exec.Action, error) {
 		return rnode.RecreateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource)
 
 	case rnode.OpUpdate:
-		// TODO
+		gotRes := got.(*backendServiceNode).resource
+		var fingerprint string
+		switch gotRes.Version() {
+		case meta.VersionGA:
+			obj, err := gotRes.ToGA()
+			if err != nil {
+				return nil, fmt.Errorf("Update function failed, cannot fetch fingerprint form GA object, err: %v", err)
+			}
+			fingerprint = obj.Fingerprint
+		}
+		klog.Infof("FINGERPINT = %s", fingerprint)
+		return rnode.UpdateActions[compute.BackendService, alpha.BackendService, beta.BackendService](&ops{}, got, n, n.resource, fingerprint)
 	}
 
 	return nil, fmt.Errorf("BackendServiceNode: invalid plan op %s", op)
