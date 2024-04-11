@@ -19,6 +19,8 @@ package exec
 import (
 	"context"
 	"fmt"
+
+	"time"
 )
 
 type Result struct {
@@ -55,6 +57,12 @@ func DryRunOption(dryRun bool) Option {
 	return func(c *ExecutorConfig) { c.DryRun = dryRun }
 }
 
+// TimeoutOption sets timeout for executor Run function.
+// This options can be used with parallel executor only.
+func TimeoutOption(t time.Duration) Option {
+	return func(c *ExecutorConfig) { c.Timeout = t }
+}
+
 // ErrorStrategy to use when an Action returns an error.
 type ErrorStrategy string
 
@@ -86,6 +94,7 @@ type ExecutorConfig struct {
 	Tracer        Tracer
 	DryRun        bool
 	ErrorStrategy ErrorStrategy
+	Timeout       time.Duration
 }
 
 func (c *ExecutorConfig) validate() error {
