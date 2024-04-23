@@ -79,9 +79,12 @@ func (ex *parallelExecutor) Run(ctx context.Context) (*Result, error) {
 	subctx, cancel := context.WithTimeout(ctx, ex.config.Timeout)
 
 	queueErr := ex.pq.Run(subctx, ex.runAction)
+	klog.Infof("ex.pq.Run(subctx, _): %v", queueErr)
 	cancel()
 	if queueErr != nil {
+		klog.Infof("queue returned error %v. Start WaitForOrphans(ctx, _)", queueErr)
 		waitErr := ex.pq.WaitForOrphans(ctx)
+		klog.Infof("ex.pq.WaitForOrphans(ctx, _): %v", waitErr)
 		if waitErr != nil {
 			return ex.result, fmt.Errorf("ParallelExecutor: WaitForOrphans: %w", waitErr)
 		}
@@ -90,7 +93,27 @@ func (ex *parallelExecutor) Run(ctx context.Context) (*Result, error) {
 		return ex.result, ErrPendingActions
 	}
 	return ex.result, nil
+}
 
+// Run executes pending actions in parallel this method does not cancel the context on timeout.
+func (ex *parallelExecutor) RunWithoutConfigTimeout(ctx context.Context) (*Result, error) {
+	ex.queueRunnableActions()
+	queueErr := ex.pq.Run(ctx, ex.runAction)
+	klog.Infof("ex.pq.Run(ctx, _): %v", queueErr)
+	if queueErr != nil {
+		// This call does not make sense because it will return immediately with error.
+		// That means that we will not wait for children and lose the information if everything is finished.
+		klog.Infof("queue returned error %v. Start WaitForOrphans(ctx, _)", queueErr)
+		waitErr := ex.pq.WaitForOrphans(ctx)
+		klog.Infof("ex.pq.WaitForOrphans(ctx, _): %v", waitErr)
+		if waitErr != nil {
+			return ex.result, fmt.Errorf("ParallelExecutor: WaitForOrphans: %w", waitErr)
+		}
+	}
+	if len(ex.result.Errors) > 0 || len(ex.result.Pending) != 0 {
+		return ex.result, ErrPendingActions
+	}
+	return ex.result, nil
 }
 
 func (ex *parallelExecutor) runAction(ctx context.Context, a Action) error {
@@ -132,20 +155,20 @@ func (ex *parallelExecutor) queueRunnableActions() {
 	ex.lock.Lock()
 	defer ex.lock.Unlock()
 
-	klog.V(4).Infof("queueRunnableActions: %d actions pending", len(ex.result.Pending))
+	klog.Infof("queueRunnableActions: %d actions pending", len(ex.result.Pending))
 
 	taskWasRun := false
 	var notRunnable []Action
 	for _, a := range ex.result.Pending {
 		if a.CanRun() {
-			klog.V(4).Infof("Run task: %s", a)
+			klog.Infof("Run task: %s", a)
 			ex.pq.Add(a)
 			taskWasRun = true
 		} else {
 			notRunnable = append(notRunnable, a)
 		}
 	}
-	klog.V(4).Infof("queueRunnableActions: remaining %d pending actions", len(notRunnable))
+	klog.Infof("queueRunnableActions: remaining %d pending actions", len(notRunnable))
 	// update Pending array only if actions were run
 	if taskWasRun {
 		ex.result.Pending = notRunnable

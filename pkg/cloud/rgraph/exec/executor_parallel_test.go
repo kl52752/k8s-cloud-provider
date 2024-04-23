@@ -18,6 +18,7 @@ package exec
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -153,4 +154,69 @@ func TestParallelExecutorErrorStrategy(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRaceConditions(t *testing.T) {
+	a := &testAction{name: "a", events: EventList{StringEvent("a")}}
+	b := &testAction{name: "b", err: fmt.Errorf("action B error")}
+	b.Want = EventList{StringEvent("a")}
+	c := &testAction{
+		name: "c",
+		runHook: func() error {
+			t.Log("Action c run hook, wait 20sec")
+			time.Sleep(20 * time.Second)
+			t.Log("Action c run hook, finish wait")
+			return nil
+		},
+	}
+	c.Want = EventList{StringEvent("a")}
+
+	mockCloud := cloud.NewMockGCE(&cloud.SingleProjectRouter{ID: "proj1"})
+	actions := []Action{a, b, c}
+	ex, err := NewParallelExecutor(mockCloud,
+		actions,
+		TimeoutOption(5*time.Second))
+	if err != nil {
+		t.Fatalf("NewParallelExecutor() = %v, want nil", err)
+	}
+	result, err := ex.Run(context.Background())
+	if err == nil {
+		t.Fatalf("Run() = %v; expected error", err)
+	}
+	t.Logf("result.Completed: %v", result.Completed)
+	t.Logf("result.Error: %v", result.Errors)
+	t.Logf("result.Pending: %v", result.Pending)
+}
+func TestRaceConditionsWithoutConfigTimeout(t *testing.T) {
+	a := &testAction{name: "a", events: EventList{StringEvent("a")}}
+	b := &testAction{name: "b", err: fmt.Errorf("action B error")}
+	b.Want = EventList{StringEvent("a")}
+	c := &testAction{
+		name: "c",
+		runHook: func() error {
+			t.Log("Action c run hook, wait 20sec")
+			time.Sleep(20 * time.Second)
+			t.Log("Action c run hook, finish wait")
+			return nil
+		},
+	}
+	c.Want = EventList{StringEvent("a")}
+
+	mockCloud := cloud.NewMockGCE(&cloud.SingleProjectRouter{ID: "proj1"})
+	actions := []Action{a, b, c}
+	ex, err := NewParallelExecutor(mockCloud,
+		actions,
+		TimeoutOption(5*time.Second))
+	if err != nil {
+		t.Fatalf("NewParallelExecutor() = %v, want nil", err)
+	}
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	result, err := ex.RunWithoutConfigTimeout(ctxWithTimeout)
+	cancel()
+	if err == nil {
+		t.Fatalf("Run() = %v; expected error", err)
+	}
+	t.Logf("result.Completed: %v", result.Completed)
+	t.Logf("result.Error: %v", result.Errors)
+	t.Logf("result.Pending: %v", result.Pending)
 }
